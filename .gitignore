@@ -1,55 +1,40 @@
-# Prerequisites
-*.d
-
-# Object files
+# Pintos 빌드 중간 파일 및 산출물
 *.o
-*.ko
-*.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
+*.d
 *.out
-*.app
-*.i*86
-*.x86_64
+*.bin
+*.elf
+*.img
+*.map
+*.lst
+*.log
+*.qemu
+*.raw
 *.hex
+*.dis
+*.dump
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+# 빌드 디렉터리
+**/build/
+**/bin/
+**/obj/
+**/output/
+# core dump
+core
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# 임시 파일
+*~
+*.swp
 
-# debug information files
-*.dwo
+# macOS
+.DS_Store
+
+# VSCode
+.vscode/
+!.vscode/settings.json
+
+# test util
+**/userprog/.test_status
+**/threads/.test_status
+**/vm/.test_status
+**/filesys/.test_status
