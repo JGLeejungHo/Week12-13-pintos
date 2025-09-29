@@ -1,5 +1,4 @@
 /* vm.c: Generic interface for virtual memory objects. */
-
 #include "vm/vm.h"                 // SPT/페이지 구조체(struct page, spt) 선언들
 
 #include "hash.h"
@@ -100,15 +99,19 @@ struct page *spt_find_page(struct supplemental_page_table *spt, void *va) {
 /* Insert PAGE into spt with validation. */
 bool spt_insert_page(struct supplemental_page_table *spt UNUSED,
                      struct page *page UNUSED) {
-  int succ = false;
-  /* TODO: Fill this function. */
+    int succ = false;
+    /* TODO: Fill this function. */
 
-  return succ;
+    if (hash_insert(&spt->hash, &page->hash_elem) != NULL) {
+        succ = true;
+    }
+
+    return succ;
 }
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page) {
-  vm_dealloc_page(page);
-  return true;
+    vm_dealloc_page(page);
+    return true;
 }
 
 /* Get the struct frame, that will be evicted. */
