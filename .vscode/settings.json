@@ -60,8 +60,8 @@
   /* 줄바꿈 설정 */
   "files.eol": "\n",
   /* C/C++ 특화 설정 */
-  "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Google, IndentWidth: 4, TabWidth: 4, UseTab: Never }",
-  "C_Cpp.clang_format_sortIncludes": true,
+  "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Google, IndentWidth: 2, TabWidth: 2, UseTab: Never, ColumnLimit: 0 }",
+  "C_Cpp.clang_format_sortIncludes": true, // #include문 자동 정렬 활성화
   /* 기타 편의 설정 */
   "editor.minimap.enabled": false,
   "editor.renderWhitespace": "boundary",
