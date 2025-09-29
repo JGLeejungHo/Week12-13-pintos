@@ -44,12 +44,12 @@
   "editor.detectIndentation": false,
   /* C/C++ 언어별 설정 추가 */
   "[c]": {
-    "editor.tabSize": 4,
+    "editor.tabSize": 2,
     "editor.insertSpaces": true,
     "editor.defaultFormatter": "ms-vscode.cpptools"
   },
   "[cpp]": {
-    "editor.tabSize": 4,
+    "editor.tabSize": 2,
     "editor.insertSpaces": true,
     "editor.defaultFormatter": "ms-vscode.cpptools"
   },
