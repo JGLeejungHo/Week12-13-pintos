@@ -138,6 +138,20 @@ static struct frame *vm_evict_frame(void) {
 static struct frame *vm_get_frame(void) {
   struct frame *frame = NULL;
   /* TODO: Fill this function. */
+  void *kva = palloc_get_page(sizeof(USERPROG));
+  if (kva == NULL) {
+    PANIC("todo");
+  }
+
+  frame = malloc(sizeof(struct frame));
+  if (frame == NULL) {
+    PANIC("Frame malloc failed");
+  }
+
+  frame->kva = kva;
+  frame->page->va = NULL;
+  frame->page = NULL;
+  frame->page->frame = frame;  // 프레임에 대한 back reference 연결
 
   ASSERT(frame != NULL);
   ASSERT(frame->page == NULL);
