@@ -11,12 +11,11 @@
 #endif
 
 /* States in a thread's life cycle. */
-enum thread_status
-{
-	THREAD_RUNNING, /* Running thread. */
-	THREAD_READY,	/* Not running but ready to run. */
-	THREAD_BLOCKED, /* Waiting for an event to trigger. */
-	THREAD_DYING	/* About to be destroyed. */
+enum thread_status {
+  THREAD_RUNNING, /* Running thread. */
+  THREAD_READY,   /* Not running but ready to run. */
+  THREAD_BLOCKED, /* Waiting for an event to trigger. */
+  THREAD_DYING    /* About to be destroyed. */
 };
 
 /* Thread identifier type.
@@ -25,9 +24,9 @@ typedef int tid_t;
 #define TID_ERROR ((tid_t) - 1) /* Error value for tid_t. */
 
 /* Thread priorities. */
-#define PRI_MIN 0	   /* Lowest priority. */
+#define PRI_MIN 0      /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
-#define PRI_MAX 63	   /* Highest priority. */
+#define PRI_MAX 63     /* Highest priority. */
 
 /* A kernel thread or user process.
  *
@@ -87,50 +86,48 @@ typedef int tid_t;
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
 
-struct child_status
-{
-	struct semaphore dead;
-	tid_t tid;
-	bool exited;
-	int exit_status;
-	struct list_elem elem;
+struct child_status {
+  struct semaphore dead;
+  tid_t tid;
+  bool exited;
+  int exit_status;
+  struct list_elem elem;
 };
 
 #define THREAD_NAME_MAX 16
 
-struct thread
-{
-	/* Owned by thread.c. */
-	tid_t tid;					/* Thread identifier. */
-	enum thread_status status;	/* Thread state. */
-	char name[THREAD_NAME_MAX]; /* Name (for debugging purposes). */
-	int base_priority;			/* thread base priority. */
-	int priority;				/* Priority. */
-	struct list donators;		/* donation list. */
-	struct lock *waiting_lock;	/* wating lock. */
-	int64_t wakeup_tick;		/* ticks of wakeup. */
-	/* Shared between thread.c and synch.c. */
-	struct list_elem elem;			/* List element. */
-	struct list_elem donation_elem; /* Donation list element. */
-	int exit_status;
-	struct list fds;
-	bool fds_inited;
-	struct file *running_file;
+struct thread {
+  /* Owned by thread.c. */
+  tid_t tid;                  /* Thread identifier. */
+  enum thread_status status;  /* Thread state. */
+  char name[THREAD_NAME_MAX]; /* Name (for debugging purposes). */
+  int base_priority;          /* thread base priority. */
+  int priority;               /* Priority. */
+  struct list donators;       /* donation list. */
+  struct lock *waiting_lock;  /* wating lock. */
+  int64_t wakeup_tick;        /* ticks of wakeup. */
+  /* Shared between thread.c and synch.c. */
+  struct list_elem elem;          /* List element. */
+  struct list_elem donation_elem; /* Donation list element. */
+  int exit_status;
+  struct list fds;
+  bool fds_inited;
+  struct file *running_file;
 
 #ifdef USERPROG
-	/* Owned by userprog/process.c. */
-	uint64_t *pml4; /* Page map level 4 */
-	struct list children;
-	struct child_status *cs;
+  /* Owned by userprog/process.c. */
+  uint64_t *pml4; /* Page map level 4 */
+  struct list children;
+  struct child_status *cs;
 #endif
 #ifdef VM
-	/* Table for whole virtual memory owned by thread. */
-	struct supplemental_page_table spt;
+  /* Table for whole virtual memory owned by thread. */
+  struct supplemental_page_table spt;
 #endif
 
-	/* Owned by thread.c. */
-	struct intr_frame tf; /* Information for switching */
-	unsigned magic;		  /* Detects stack overflow. */
+  /* Owned by thread.c. */
+  struct intr_frame tf; /* Information for switching */
+  unsigned magic;       /* Detects stack overflow. */
 };
 
 /* If false (default), use round-robin scheduler.
@@ -173,7 +170,8 @@ void thread_restore_by_lock(struct lock *lock);
 
 void do_iret(struct intr_frame *tf);
 
-bool higher_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
-struct child_status *find_matched_tid(tid_t pid); // find child by pid
+bool higher_priority(const struct list_elem *a, const struct list_elem *b,
+                     void *aux);
+struct child_status *find_matched_tid(tid_t pid);  // find child by pid
 
 #endif /* threads/thread.h */

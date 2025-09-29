@@ -1,10 +1,13 @@
 /* vm.c: Generic interface for virtual memory objects. */
 
-#include "vm/vm.h"
+#include "vm/vm.h"                 // SPT/페이지 구조체(struct page, spt) 선언들
 
 #include "hash.h"
 #include "threads/malloc.h"
 #include "vm/inspect.h"
+
+#include <stdint.h>            // 🅢 uintptr_t: 포인터 비교 시 정수 변환용
+#include "lib/kernel/hash.h"   // 🅢 Pintos 커널 해시 테이블 API(hash_init/hash_find/...)
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -36,6 +39,19 @@ enum vm_type page_get_type(struct page *page) {
 static struct frame *vm_get_victim(void);
 static bool vm_do_claim_page(struct page *page);
 static struct frame *vm_evict_frame(void);
+
+/* 🅢 [키->해시값] 해시테이블이 쓸 해시값을 계산 -> 해시테이블이 버킷을 선택*/
+static unsigned page_hash(const struct hash_elem *e, void *aux) {
+  const struct page *p = hash_entry(e, struct page, hash_elem);  // hash_elem 을 원래 page 객체로 되돌림
+  return hash_bytes(&p->va, sizeof p->va);                       // 키(va)를 바이트로 섞어 '버킷 번호'를 뽑는 해시값 계산
+}
+
+/*🅢 [비교 함수] 같은 버킷 내 정렬/동일키 판정 기준(오름차순) */
+static bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux) {
+  const struct page *pa = hash_entry(a, struct page, hash_elem);
+  const struct page *pb = hash_entry(b, struct page, hash_elem);
+  return (uintptr_t)pa->va < (uintptr_t)pb->va;
+}
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -172,7 +188,10 @@ static bool vm_do_claim_page(struct page *page) {
 }
 
 /* Initialize new supplemental page table */
-void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED) {}
+/*🅢 [초기화] SPT를 해시 테이블로 “사용 가능 상태”로 만듦*/
+void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED) {
+  hash_init(&spt->hash, page_hash, page_less, NULL);
+}
 
 /* Copy supplemental page table from src to dst */
 bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,

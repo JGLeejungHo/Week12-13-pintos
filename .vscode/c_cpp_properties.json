@@ -2,10 +2,13 @@
   "configurations": [
     {
       "name": "default",
-       "includePath": [
+      "includePath": [
         "${workspaceFolder}/**"
       ],
-      "defines": ["USERPROG"]
+      "defines": [
+        "USERPROG",
+        "VM"
+      ]
     }
   ],
   "version": 4
