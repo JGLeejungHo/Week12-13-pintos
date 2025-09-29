@@ -2,6 +2,7 @@
 #define VM_VM_H
 #include <stdbool.h>
 
+#include "lib/kernel/hash.h"
 #include "threads/palloc.h"
 
 enum vm_type {
@@ -43,8 +44,8 @@ struct thread;
  * DO NOT REMOVE/MODIFY PREDEFINED MEMBER OF THIS STRUCTURE. */
 struct page {
   const struct page_operations *operations;
-  void *va;                    /* Address in terms of user space */
-  struct frame *frame;         /* Back reference for frame */
+  void *va;            /* Address in terms of user space */
+  struct frame *frame; /* Back reference for frame */
   /* Your implementation */
   struct hash_elem hash_elem;  // 🅢 hash_entry (해시에 넣기 위한 고정 슬롯)
 
@@ -59,7 +60,6 @@ struct page {
 #endif
   };
 };
-
 
 /* The representation of "frame" */
 struct frame {
@@ -86,8 +86,8 @@ struct page_operations {
 /* Representation of current process's memory space.
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
-struct supplemental_page_table{
-  struct hash hash;            // 🅢 실제 해시 테이블 본체
+struct supplemental_page_table {
+  struct hash hash;  // 🅢 실제 해시 테이블 본체
 };
 
 #include "threads/thread.h"
