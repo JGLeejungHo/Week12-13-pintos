@@ -2,7 +2,7 @@
 #define VM_VM_H
 #include <stdbool.h>
 
-#include "lib/kernel/hash.h"
+#include "lib/kernel/hash.h"  // 🅢 Pintos 커널 해시 테이블 API(hash_init/hash_find/...)
 #include "threads/palloc.h"
 
 enum vm_type {
@@ -48,6 +48,7 @@ struct page {
   struct frame *frame; /* Back reference for frame */
   /* Your implementation */
   struct hash_elem hash_elem;  // 🅢 hash_entry (해시에 넣기 위한 고정 슬롯)
+  bool writable;               // 🅕 페이지 쓰기 가능 여부
 
   /* Per-type data are binded into the union.
    * Each function automatically detects the current union */
