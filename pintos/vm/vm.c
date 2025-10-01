@@ -212,10 +212,20 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED, bool us
 
   // 3. 없으면:유저 모드 한정 스택 성장 허용
   if (!page) {
-    if (!user) return false;
-    void *rsp = f->rsp;
-
-    if (!((uintptr_t)addr >= ((uintptr_t)f->rsp - 8) && (uintptr_t)addr < (void *)USER_STACK)) return false;
+    /* 스택 확장 조건 검사:
+     * 1. 폴트 주소가 USER_STACK 범위 안에 있어야 함
+     * 2. 폴트 주소가 현재 유저 스택 포인터보다 아래에 있어야 함 (스택은 높은 주소에서 낮은 주소로 자람)
+     * 3. 너무 큰 갭(e.g., 1MB)을 건너뛴 스택 확장은 방지 (선택적)
+     */
+    // void *rsp = user ? f->rsp : thread_current()->rsp;
+    uintptr_t rsp;
+    if (user)
+      rsp = f->rsp;
+    else
+      rsp = thread_current()->rsp;
+    if (! (is_user_vaddr(addr) && (USER_STACK - (1 << 20) < addr) && (addr < USER_STACK) && (addr >= rsp - 8))) {
+      return false;
+    }
 
     if (!vm_alloc_page_with_initializer(VM_ANON, va, true, NULL, NULL)) return false;
 
