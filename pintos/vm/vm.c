@@ -8,14 +8,11 @@
 #include "threads/malloc.h"
 #include "vm/inspect.h"
 
-<<<<<<< HEAD
-=======
 // 🅛
 #include "threads/interrupt.h"  // struct intr_frame (f->rsp 접근)
 #include "threads/thread.h"     // thread_current(), struct thread
 #include "threads/vaddr.h"      // is_user_vaddr, pg_round_down, PHYS_BASE
 
->>>>>>> dev
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void vm_init(void) {
@@ -64,10 +61,7 @@ static bool page_less(const struct hash_elem *a, const struct hash_elem *b, void
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
 /* 나중에 올릴 준비만 하는 PTE를 SPT에 등록*/
-<<<<<<< HEAD
-=======
 /*“읽을 바이트/제로 바이트”를 페이지 단위로 계산 -> 대기 페이지 등록만(실제 읽기·매핑은 page fault 때)*/
->>>>>>> dev
 bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
                                     bool writable, vm_initializer *init,
                                     void *aux) {
@@ -101,10 +95,6 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
     page->writable = writable;
 
     /* TODO: Insert the page into the spt. */
-<<<<<<< HEAD
-    // struct page *page = malloc(sizeof *page);
-    // if (!page) goto err;
-=======
     if (!spt_insert_page(spt, page)) {
       free(page);
       goto err;
@@ -114,25 +104,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
 err:
   return false;
 }
->>>>>>> dev
 
-    // switch (VM_TYPE(type)) {
-    //   case VM_ANON:
-
-    //   case VM_FILE:
-    //   default:
-    //     free(page);
-    //     goto err;
-    // }
-
-    // page->writable = writable;
-    // if (!spt_insert_page(spt, page)) free(page);
-    // goto err;
-    // return true;
-  err:
-    return false;
-  }
-}
 /* Find VA from spt and return page. On error, return NULL. */
 /* 🅢 "주소 → page 메타데이터"를 해시테이블에서 찾음*/
 struct page *spt_find_page(struct supplemental_page_table *spt, void *va) {
@@ -195,19 +167,11 @@ static struct frame *vm_evict_frame(void) {
  * and return it. This always return valid address. That is, if the user pool
  * memory is full, this function evicts the frame to get the available memory
  * space.*/
-<<<<<<< HEAD
-// 🅕
-static struct frame *vm_get_frame(void) {
-  struct frame *frame = NULL;
-  /* TODO: Fill this function. */
-  void *kva = palloc_get_page(sizeof(USERPROG));  // 사용자 풀에서 물리페이지 가져오기
-=======
 /*🅕 프레임 실물 확보(+프레임 메타 생성)*/
 static struct frame *vm_get_frame(void) {
   struct frame *frame = NULL;
   /* TODO: Fill this function. */
   void *kva = palloc_get_page(PAL_USER);  // ✅ 플래그는 PAL_USER
->>>>>>> dev
   if (kva == NULL) {
     PANIC("todo");
   }
@@ -216,15 +180,9 @@ static struct frame *vm_get_frame(void) {
     PANIC("Frame malloc failed");
   }
   frame->kva = kva;
-<<<<<<< HEAD
-  frame->page->va = NULL;  // 멤버들초기화
-  frame->page = NULL;
-  frame->page->frame = frame;  // page에서 frame 접근할수있게 설정
-=======
   // frame->page->va = NULL;  // 멤버들초기화
   frame->page = NULL;
   // frame->page->frame = frame;  // page에서 frame 접근할수있게 설정
->>>>>>> dev
   ASSERT(frame != NULL);
   ASSERT(frame->page == NULL);
   return frame;  // 반환
@@ -265,7 +223,7 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED, bool us
       rsp = f->rsp;
     else
       rsp = thread_current()->rsp;
-    if (! (is_user_vaddr(addr) && (USER_STACK - (1 << 20) < addr) && (addr < USER_STACK) && (addr >= rsp - 8))) {
+    if (!(is_user_vaddr(addr) && (USER_STACK - (1 << 20) < addr) && (addr < USER_STACK) && (addr >= rsp - 8))) {
       return false;
     }
 
@@ -304,12 +262,8 @@ bool vm_claim_page(void *va) {
   return vm_do_claim_page(page);  // 있으면 -> 실제 메모리에 올리기
 }
 
-<<<<<<< HEAD
-/* 🅕 Claim the PAGE and set up the mmu. */
-=======
 /* Claim the PAGE and set up the mmu. */
 /* 🅕 실제 데이터 프레임에 채우기 + mmu에 매핑 */
->>>>>>> dev
 static bool vm_do_claim_page(struct page *page) {
   if (page == NULL) {
     return false;
