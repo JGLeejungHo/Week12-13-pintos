@@ -8,6 +8,14 @@
 #include "threads/malloc.h"
 #include "vm/inspect.h"
 
+<<<<<<< HEAD
+=======
+// 🅛
+#include "threads/interrupt.h"  // struct intr_frame (f->rsp 접근)
+#include "threads/thread.h"     // thread_current(), struct thread
+#include "threads/vaddr.h"      // is_user_vaddr, pg_round_down, PHYS_BASE
+
+>>>>>>> dev
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void vm_init(void) {
@@ -39,7 +47,7 @@ static struct frame *vm_get_victim(void);
 static bool vm_do_claim_page(struct page *page);
 static struct frame *vm_evict_frame(void);
 
-/* 🅢 [키->해시값] 해시테이블이 쓸 해시값을 계산 -> 해시테이블이 버킷을 선택*/
+/*🅢 [키->해시값] 해시테이블이 쓸 해시값을 계산 -> 해시테이블이 버킷을 선택*/
 static unsigned page_hash(const struct hash_elem *e, void *aux) {
   const struct page *p = hash_entry(e, struct page, hash_elem);  // hash_elem 을 원래 page 객체로 되돌림
   return hash_bytes(&p->va, sizeof p->va);                       // 키(va)를 바이트로 섞어 '버킷 번호'를 뽑는 해시값 계산
@@ -56,10 +64,14 @@ static bool page_less(const struct hash_elem *a, const struct hash_elem *b, void
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
 /* 나중에 올릴 준비만 하는 PTE를 SPT에 등록*/
+<<<<<<< HEAD
+=======
+/*“읽을 바이트/제로 바이트”를 페이지 단위로 계산 -> 대기 페이지 등록만(실제 읽기·매핑은 page fault 때)*/
+>>>>>>> dev
 bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
                                     bool writable, vm_initializer *init,
                                     void *aux) {
-  ASSERT(VM_TYPE(type) != VM_UNINIT)
+  ASSERT(VM_TYPE(type) != VM_UNINIT)  // type 이 UNINIT 이라면 PANIC
 
   upage = pg_round_down(upage);
   struct supplemental_page_table *spt = &thread_current()->spt;
@@ -69,10 +81,40 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
     /* TODO: Create the page, fetch the initialier according to the VM type,
      * TODO: and then create "uninit" page struct by calling uninit_new. You
      * TODO: should modify the field after calling the uninit_new. */
+    struct page *page = malloc(sizeof(*page));
+    if (page == NULL) {
+      goto err;
+    }
+    bool uninitialized = NULL;
+    switch (VM_TYPE(type)) { /* uninit_new()를 이용해 "uninitialized page"로 설정 */
+      case VM_ANON:
+        uninit_new(page, upage, init, type, aux, anon_initializer);
+        // anon_initializer()이 아니라anon_initializer인 이유는 함수 포인터 함수의 주소를 저장
+        break;
+      case VM_FILE:
+        uninit_new(page, upage, init, type, aux, file_backed_initializer);
+        break;
+      default:
+        break;
+    }
+
+    page->writable = writable;
 
     /* TODO: Insert the page into the spt. */
+<<<<<<< HEAD
     // struct page *page = malloc(sizeof *page);
     // if (!page) goto err;
+=======
+    if (!spt_insert_page(spt, page)) {
+      free(page);
+      goto err;
+    }
+    return true;
+  }
+err:
+  return false;
+}
+>>>>>>> dev
 
     // switch (VM_TYPE(type)) {
     //   case VM_ANON:
@@ -153,11 +195,19 @@ static struct frame *vm_evict_frame(void) {
  * and return it. This always return valid address. That is, if the user pool
  * memory is full, this function evicts the frame to get the available memory
  * space.*/
+<<<<<<< HEAD
 // 🅕
 static struct frame *vm_get_frame(void) {
   struct frame *frame = NULL;
   /* TODO: Fill this function. */
   void *kva = palloc_get_page(sizeof(USERPROG));  // 사용자 풀에서 물리페이지 가져오기
+=======
+/*🅕 프레임 실물 확보(+프레임 메타 생성)*/
+static struct frame *vm_get_frame(void) {
+  struct frame *frame = NULL;
+  /* TODO: Fill this function. */
+  void *kva = palloc_get_page(PAL_USER);  // ✅ 플래그는 PAL_USER
+>>>>>>> dev
   if (kva == NULL) {
     PANIC("todo");
   }
@@ -166,9 +216,15 @@ static struct frame *vm_get_frame(void) {
     PANIC("Frame malloc failed");
   }
   frame->kva = kva;
+<<<<<<< HEAD
   frame->page->va = NULL;  // 멤버들초기화
   frame->page = NULL;
   frame->page->frame = frame;  // page에서 frame 접근할수있게 설정
+=======
+  // frame->page->va = NULL;  // 멤버들초기화
+  frame->page = NULL;
+  // frame->page->frame = frame;  // page에서 frame 접근할수있게 설정
+>>>>>>> dev
   ASSERT(frame != NULL);
   ASSERT(frame->page == NULL);
   return frame;  // 반환
@@ -181,14 +237,48 @@ static void vm_stack_growth(void *addr UNUSED) {}
 static bool vm_handle_wp(struct page *page UNUSED) {}
 
 /* Return true on success */
-bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
-                         bool user UNUSED, bool write UNUSED,
-                         bool not_present UNUSED) {
+/*🅛*/
+bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED, bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
   struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
   struct page *page = NULL;
   /* TODO: Validate the fault */
   /* TODO: Your code goes here */
 
+  // 1. 예외 처리
+  if (!not_present) return false;                   // 물리 메모리 가상 주소
+  if (!addr || !is_user_vaddr(addr)) return false;  // 유저 주소 유효성
+
+  // 2. 페이지 경계 주소 → SPT 조회
+  void *va = pg_round_down(addr);
+  page = spt_find_page(spt, va);
+
+  // 3. 없으면:유저 모드 한정 스택 성장 허용
+  if (!page) {
+    /* 스택 확장 조건 검사:
+     * 1. 폴트 주소가 USER_STACK 범위 안에 있어야 함
+     * 2. 폴트 주소가 현재 유저 스택 포인터보다 아래에 있어야 함 (스택은 높은 주소에서 낮은 주소로 자람)
+     * 3. 너무 큰 갭(e.g., 1MB)을 건너뛴 스택 확장은 방지 (선택적)
+     */
+    // void *rsp = user ? f->rsp : thread_current()->rsp;
+    uintptr_t rsp;
+    if (user)
+      rsp = f->rsp;
+    else
+      rsp = thread_current()->rsp;
+    if (! (is_user_vaddr(addr) && (USER_STACK - (1 << 20) < addr) && (addr < USER_STACK) && (addr >= rsp - 8))) {
+      return false;
+    }
+
+    if (!vm_alloc_page_with_initializer(VM_ANON, va, true, NULL, NULL)) return false;
+
+    page = spt_find_page(spt, va);
+    if (!page) return false;
+  }
+
+  // 4. 쓰기 권한 체크
+  if (write && !page->writable) return false;
+
+  // 5. 클레임(프레임 확보+로드/제로필+매핑)
   return vm_do_claim_page(page);
 }
 
@@ -214,7 +304,12 @@ bool vm_claim_page(void *va) {
   return vm_do_claim_page(page);  // 있으면 -> 실제 메모리에 올리기
 }
 
+<<<<<<< HEAD
 /* 🅕 Claim the PAGE and set up the mmu. */
+=======
+/* Claim the PAGE and set up the mmu. */
+/* 🅕 실제 데이터 프레임에 채우기 + mmu에 매핑 */
+>>>>>>> dev
 static bool vm_do_claim_page(struct page *page) {
   if (page == NULL) {
     return false;

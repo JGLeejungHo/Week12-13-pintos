@@ -66,12 +66,12 @@ static void *valid_uaddr(const char *uaddr)
 	{
 		return NULL;
 	}
-	if ((ptr = pml4_get_page(thread_current()->pml4, (void *)uaddr)) == NULL)
-	{
-		return NULL;
-	}
 
-	return ptr;
+	/* Project 3: VM - SPT를 먼저 확인하여 잠재적으로 유효한 주소인지 검사 */
+	if (spt_find_page(&thread_current()->spt, uaddr) == NULL) {
+		return NULL; // SPT에 없으면 정말로 유효하지 않은 주소
+	}
+	return (void *)uaddr; // 유효성 검사 통과
 }
 
 // user -> kernel (string)
@@ -81,12 +81,11 @@ static size_t copy_in_string(char *kdst, const char *usrc, size_t max)
 	for (n = 0; n < max; n++)
 	{
 		const char *p = usrc + n;
-		uint8_t *vaddr;
-		if ((vaddr = valid_uaddr(p)) == NULL)
+		if (valid_uaddr(p) == NULL)
 		{
 			handle_exit(-1);
 		}
-		uint8_t c = *vaddr;
+		char c = *(char *)p; // 페이지 폴트를 유발하도록 직접 접근
 		((uint8_t *)kdst)[n] = c;
 
 		if (c == '\0')
@@ -115,12 +114,11 @@ static size_t copy_in(void *kdst, const void *usrc, size_t size)
 	while (n < size)
 	{
 		const uint8_t *p = (uint8_t *)usrc + n;
-		uint8_t *vaddr;
-		if ((vaddr = valid_uaddr(p)) == NULL)
+		if (valid_uaddr(p) == NULL)
 		{
 			handle_exit(-1);
 		}
-		((uint8_t *)kdst)[n++] = *vaddr;
+		((uint8_t *)kdst)[n++] = *(uint8_t *)p; // 페이지 폴트를 유발하도록 직접 접근
 	}
 	return n;
 }
@@ -133,14 +131,13 @@ static size_t copy_out(void *udst, const void *ksrc, size_t size)
 	while (n < size)
 	{
 		uint8_t *cur = (uint8_t *)udst + n;
-		uint8_t *kaddr;
-		if ((kaddr = valid_uaddr(cur)) == NULL
+		if (valid_uaddr(cur) == NULL
 			// || !pml4_is_writable(t->pml4, cur)
 		)
 		{
 			handle_exit(-1);
 		}
-		*kaddr = ((uint8_t *)ksrc)[n++];
+		*(uint8_t *)cur = ((uint8_t *)ksrc)[n++]; // 페이지 폴트를 유발하도록 직접 접근
 	}
 	return n;
 }
@@ -499,6 +496,9 @@ bool init_fds(struct list *fds)
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED)
 {
+	/* 유저 스택 포인터 저장 */
+	thread_current()->rsp = f->rsp;
+
 	// printf("[syscall] thr=%s tid=%d no=%lld rip=%p rsp=%p\n",
 	// 	   thread_current()->name, thread_current()->tid,
 	// 	   f->R.rax, (void *)f->rip, (void *)f->rsp);
