@@ -171,7 +171,7 @@ static struct frame *vm_evict_frame(void) {
 static struct frame *vm_get_frame(void) {
   struct frame *frame = NULL;
   /* TODO: Fill this function. */
-  void *kva = palloc_get_page(sizeof(USERPROG));  // 사용자 풀에서 물리페이지 가져오기
+  void *kva = palloc_get_page(PAL_USER);  // ✅ 플래그는 PAL_USER
   if (kva == NULL) {
     PANIC("todo");
   }
@@ -180,9 +180,9 @@ static struct frame *vm_get_frame(void) {
     PANIC("Frame malloc failed");
   }
   frame->kva = kva;
-  frame->page->va = NULL;  // 멤버들초기화
+  // frame->page->va = NULL;  // 멤버들초기화
   frame->page = NULL;
-  frame->page->frame = frame;  // page에서 frame 접근할수있게 설정
+  // frame->page->frame = frame;  // page에서 frame 접근할수있게 설정
   ASSERT(frame != NULL);
   ASSERT(frame->page == NULL);
   return frame;  // 반환
