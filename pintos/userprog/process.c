@@ -816,90 +816,43 @@ static bool lazy_load_segment(struct page *page, void *aux) {
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
 
-/*“읽을 바이트/제로 바이트”를 페이지 단위로 계산 -> 대기 페이지 등록만(실제 읽기·매핑은 page fault 때)*/
-/* Create the pending page object with initializer. If you want to create a
- * page, do not create it directly and make it through this function or
- * `vm_alloc_page`. */
-bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
-                                    bool writable, vm_initializer *init,
-                                    void *aux) {
-  ASSERT(VM_TYPE(type) != VM_UNINIT)  // type 이 UNINIT 이라면 PANIC
+static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
+                         uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+  ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
+  ASSERT(pg_ofs(upage) == 0);
+  ASSERT(ofs % PGSIZE == 0);
 
-  upage = pg_round_down(upage);
-  struct supplemental_page_table *spt = &thread_current()->spt;
+  while (read_bytes > 0 || zero_bytes > 0) {
+    /* Do calculate how to fill this page.
+     * We will read PAGE_READ_BYTES bytes from FILE
+     * and zero the final PAGE_ZERO_BYTES bytes. */
+    size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-  /* Check wheter the upage is already occupied or not. */
-  if (spt_find_page(spt, upage) == NULL) {
-    /* TODO: Create the page, fetch the initialier according to the VM type,
-     * TODO: and then create "uninit" page struct by calling uninit_new. You
-     * TODO: should modify the field after calling the uninit_new. */
-    struct page *page = malloc(sizeof(*page));
-    if (page == NULL) {
-      goto err;
-    }
-    bool uninitialized = NULL;
-    switch (VM_TYPE(type)) { /* uninit_new()를 이용해 "uninitialized page"로 설정 */
-      case VM_ANON:
-        uninit_new(page, upage, init, type, aux, anon_initializer);
-        // anon_initializer()이 아니라anon_initializer인 이유는 함수 포인터 함수의 주소를 저장
-        break;
-      case VM_FILE:
-        uninit_new(page, upage, init, type, aux, file_backed_initializer);
-        break;
-      default:
-        break;
+    struct lazy_aux *aux = malloc(sizeof *aux);
+    if (!aux) return false;
+
+    aux->file = file;
+    aux->ofs = ofs;
+    aux->read_bytes = page_read_bytes;
+    aux->zero_bytes = page_zero_bytes;
+    aux->writable = writable;
+
+    /* TODO: Set up aux to pass information to the lazy_load_segment. */
+    // void *aux = NULL;
+    if (!vm_alloc_page_with_initializer(VM_FILE, upage, writable, lazy_load_segment, aux)) {
+      free(aux);
+      return false;
     }
 
-    page->writable = writable;
-
-    /* TODO: Insert the page into the spt. */
-    if (!spt_insert_page(spt, page)) {
-      free(page);
-      goto err;
-    }
-    return true;
+    /* Advance. */
+    read_bytes -= page_read_bytes;
+    zero_bytes -= page_zero_bytes;
+    upage += PGSIZE;
+    ofs += page_read_bytes;
   }
-err:
-  return false;
+  return true;
 }
-
-// static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
-//                          uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
-//   ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
-//   ASSERT(pg_ofs(upage) == 0);
-//   ASSERT(ofs % PGSIZE == 0);
-
-//   while (read_bytes > 0 || zero_bytes > 0) {
-//     /* Do calculate how to fill this page.
-//      * We will read PAGE_READ_BYTES bytes from FILE
-//      * and zero the final PAGE_ZERO_BYTES bytes. */
-//     size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-//     size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-//     struct lazy_aux *aux = malloc(sizeof *aux);
-//     if (!aux) return false;
-
-//     aux->file = file;
-//     aux->ofs = ofs;
-//     aux->read_bytes = page_read_bytes;
-//     aux->zero_bytes = page_zero_bytes;
-//     aux->writable = writable;
-
-//     /* TODO: Set up aux to pass information to the lazy_load_segment. */
-//     // void *aux = NULL;
-//     if (!vm_alloc_page_with_initializer(VM_FILE, upage, writable, lazy_load_segment, aux)) {
-//       free(aux);
-//       return false;
-//     }
-
-//     /* Advance. */
-//     read_bytes -= page_read_bytes;
-//     zero_bytes -= page_zero_bytes;
-//     upage += PGSIZE;
-//     ofs += page_read_bytes;
-//   }
-//   return true;
-// }
 
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool setup_stack(struct intr_frame *if_) {

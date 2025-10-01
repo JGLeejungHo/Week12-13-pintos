@@ -61,10 +61,11 @@ static bool page_less(const struct hash_elem *a, const struct hash_elem *b, void
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
 /* 나중에 올릴 준비만 하는 PTE를 SPT에 등록*/
+/*“읽을 바이트/제로 바이트”를 페이지 단위로 계산 -> 대기 페이지 등록만(실제 읽기·매핑은 page fault 때)*/
 bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
                                     bool writable, vm_initializer *init,
                                     void *aux) {
-  ASSERT(VM_TYPE(type) != VM_UNINIT)
+  ASSERT(VM_TYPE(type) != VM_UNINIT)  // type 이 UNINIT 이라면 PANIC
 
   upage = pg_round_down(upage);
   struct supplemental_page_table *spt = &thread_current()->spt;
@@ -74,28 +75,36 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
     /* TODO: Create the page, fetch the initialier according to the VM type,
      * TODO: and then create "uninit" page struct by calling uninit_new. You
      * TODO: should modify the field after calling the uninit_new. */
+    struct page *page = malloc(sizeof(*page));
+    if (page == NULL) {
+      goto err;
+    }
+    bool uninitialized = NULL;
+    switch (VM_TYPE(type)) { /* uninit_new()를 이용해 "uninitialized page"로 설정 */
+      case VM_ANON:
+        uninit_new(page, upage, init, type, aux, anon_initializer);
+        // anon_initializer()이 아니라anon_initializer인 이유는 함수 포인터 함수의 주소를 저장
+        break;
+      case VM_FILE:
+        uninit_new(page, upage, init, type, aux, file_backed_initializer);
+        break;
+      default:
+        break;
+    }
+
+    page->writable = writable;
 
     /* TODO: Insert the page into the spt. */
-    // struct page *page = malloc(sizeof *page);
-    // if (!page) goto err;
-
-    // switch (VM_TYPE(type)) {
-    //   case VM_ANON:
-
-    //   case VM_FILE:
-    //   default:
-    //     free(page);
-    //     goto err;
-    // }
-
-    // page->writable = writable;
-    // if (!spt_insert_page(spt, page)) free(page);
-    // goto err;
-    // return true;
-  err:
-    return false;
+    if (!spt_insert_page(spt, page)) {
+      free(page);
+      goto err;
+    }
+    return true;
   }
+err:
+  return false;
 }
+
 /* Find VA from spt and return page. On error, return NULL. */
 /* 🅢 "주소 → page 메타데이터"를 해시테이블에서 찾음*/
 struct page *spt_find_page(struct supplemental_page_table *spt, void *va) {
