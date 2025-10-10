@@ -9,8 +9,9 @@
  * */
 
 #include "vm/uninit.h"
+
+#include "threads/malloc.h"  // 🅒 free() 선언
 #include "vm/vm.h"
-#include "threads/malloc.h"   // 🅒 free() 선언
 
 static bool uninit_initialize(struct page *page, void *kva);
 static void uninit_destroy(struct page *page);
@@ -64,7 +65,7 @@ static void uninit_destroy(struct page *page) {
   struct uninit_page *uninit = &page->uninit;
   /* TODO: Fill this function.
    * TODO: If you don't have anything to do, just return. */
-  if (uninit->aux) {
+  if (uninit->type == VM_UNINIT) {
     free(uninit->aux);
     uninit->aux = NULL;
   }
