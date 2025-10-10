@@ -330,19 +330,30 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
   return true;
 }
 
+/* [1] 해시 원소(=페이지) 하나를 “어떻게” 지울지 알려주는 콜백 */
+static void spt_destructor(struct hash_elem *e, void *aux UNUSED) {
+  struct page *page = hash_entry(e, struct page, hash_elem);
+  destroy(page);  // 내부에서 page->operations->destroy(page) 호출되게 구현
+}
+
+/* [2] 스레드가 들고 있는 SPT 전체를 안전하게 정리 */
 /* Free the resource hold by the supplemental page table */
 void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED) {
   /* TODO: Destroy all the supplemental_page_table hold by thread and
    * TODO: writeback all the modified contents to the storage. */
 
-  struct hash_iterator i;
-  hash_first(&i, &spt->hash);
+  if (!spt || !spt->hash.buckets || !spt->hash.bucket_cnt) return;  // 예외처리(SPT 자체가 없음, 버킷 메모리 없음)
 
-  while (hash_next(&i)) {
-    struct page *page = hash_entry(hash_cur(&i), struct page, hash_elem);
+  hash_clear(&spt->hash, spt_destructor);
 
-    destroy(page);
-  }
+  // struct hash_iterator i;
+  // hash_first(&i, &spt->hash);
 
-  hash_clear(&spt->hash, NULL);
+  // while (hash_next(&i)) {
+  //   struct page *page = hash_entry(hash_cur(&i), struct page, hash_elem);
+
+  //   destroy(page);
+  // }
+
+  // hash_clear(&spt->hash, NULL);
 }
