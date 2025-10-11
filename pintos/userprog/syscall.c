@@ -7,6 +7,7 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "vm/vm.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "include/filesys/directory.h"
@@ -67,11 +68,8 @@ static void *valid_uaddr(const char *uaddr)
 		return NULL;
 	}
 
-	/* Project 3: VM - SPT를 먼저 확인하여 잠재적으로 유효한 주소인지 검사 */
-	if (spt_find_page(&thread_current()->spt, uaddr) == NULL) {
-		return NULL; // SPT에 없으면 정말로 유효하지 않은 주소
-	}
-	return (void *)uaddr; // 유효성 검사 통과
+	// 페이지 폴트 핸들러가 주소의 유효성을 처리하도록 실제 접근을 유도합니다.
+	return (void *)uaddr;
 }
 
 // user -> kernel (string)
@@ -260,6 +258,13 @@ static int handle_read(int fd, void *ubuf, unsigned size)
 
 	struct thread *t = thread_current();
 	struct fd_elem *fe;
+
+#ifdef VM
+	struct page *page = spt_find_page(&thread_current()->spt, ubuf);
+	if (page && !page->writable) {
+		handle_exit(-1);
+	}
+#endif
 
 	// invalid fd (stdin in fds)
 	if ((fe = find_matched_fd(&t->fds, fd)) == NULL)
