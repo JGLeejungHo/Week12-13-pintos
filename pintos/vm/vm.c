@@ -211,7 +211,22 @@ static bool vm_handle_wp(struct page *page UNUSED) {}
 /** Project 3-Stack Growth*/
 #define STACK_LIMIT (USER_STACK - (1 << 20))
 
-/* Return true on success */
+/**
+ * @brief 페이지 폴트를 처리하는 함수
+ * 
+ * @param f 인터럽트 프레임 구조체 포인터
+ * @param addr 페이지 폴트가 발생한 가상 주소
+ * @param user 유저 모드에서 발생한 폴트인지 여부
+ * @param write 쓰기 접근으로 인한 폴트인지 여부
+ * @param not_present 해당 페이지가 존재하지 않아서 발생한 폴트인지 여부
+ * 
+ * @return 페이지 폴트 처리 성공 시 true, 실패 시 false 반환
+ * 
+ * @details 페이지 폴트가 발생했을 때 호출되며, 다음과 같은 경우들을 처리:
+ * - 스택 확장이 필요한 경우 스택을 증가시킴
+ * - 페이지가 SPT에 있는 경우 해당 페이지를 물리 메모리에 로드
+ * - 잘못된 메모리 접근인 경우 false를 반환
+ */
 /*🅛*/
 bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED, bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
   struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
@@ -222,16 +237,18 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED, bool us
   if (addr == NULL || is_kernel_vaddr(addr))
     return false;
 
-  if (not_present)
-  {
+  if (not_present) {
     /** Project 3-Stack Growth*/
     // 시스템 콜 중에는 f->rsp가 커널 주소를 가리킬 수 있으므로 thread_current()->rsp를 사용합니다.
     void *rsp = user ? f->rsp : thread_current()->rsp;
-    if (addr >= rsp - 8 || (USER_STACK >= addr && addr >= STACK_LIMIT && addr >= rsp)) {
-      vm_stack_growth(addr);
-      return true;
-    }
-    else if (STACK_LIMIT <= addr && addr <= USER_STACK && addr > rsp){
+
+    /* 스택 확장 로직
+     * addr >= rsp - 8 : push 명령어처럼 스택 포인터 바로 아래 주소에 접근할 때를 처리
+     * (USER_STACK >= addr && addr >= STACK_LIMIT && addr >= rsp)
+     * - addr이 최대 스택 크기(1MB) 제한인 STACK_LIMIT과 USER_STACK 사이의 유효한 범위에 있고,
+     *   현재 스택 포인터 rsp보다 위쪽(높은 주소)에 있는 경우를 처리한다. (= 스택에 큰 버퍼를 잡고 접근할 때 발생할 경우를 처리)
+     */
+    if (addr >= STACK_LIMIT && addr < USER_STACK && (addr >= rsp - 8)) {
       vm_stack_growth(addr);
       return true;
     }

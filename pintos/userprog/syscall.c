@@ -260,6 +260,7 @@ static int handle_read(int fd, void *ubuf, unsigned size)
 	struct fd_elem *fe;
 
 #ifdef VM
+	/* 쓰기 금지된 영역에 데이터를 쓰려고 시도하는 것을 막기 위한 보호 코드 */
 	struct page *page = spt_find_page(&thread_current()->spt, ubuf);
 	if (page && !page->writable) {
 		handle_exit(-1);
