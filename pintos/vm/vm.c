@@ -192,55 +192,57 @@ static struct frame *vm_get_frame(void) {
 }
 
 /* Growing the stack. */
-static void vm_stack_growth(void *addr UNUSED) {}
+static void vm_stack_growth(void *addr UNUSED) {
+  /** Project 3-Stack Growth*/
+  bool success = false;
+  addr = pg_round_down(addr);
+  if (vm_alloc_page(VM_ANON | VM_MARKER_0, addr, true)) {
+    success = vm_claim_page(addr);
+
+    if (success) {
+      thread_current()->stack_bottom -= PGSIZE;
+    }
+  }
+}
 
 /* Handle the fault on write_protected page */
 static bool vm_handle_wp(struct page *page UNUSED) {}
 
+/** Project 3-Stack Growth*/
+#define STACK_LIMIT (USER_STACK - (1 << 20))
+
 /* Return true on success */
 /*🅛*/
 bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED, bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-  struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
+  struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+
+  /** Project 3-Anonymous Page */
   struct page *page = NULL;
-  /* TODO: Validate the fault */
-  /* TODO: Your code goes here */
 
-  // 1. 예외 처리
-  if (!not_present) return false;                   // 물리 메모리 가상 주소
-  if (!addr || !is_user_vaddr(addr)) return false;  // 유저 주소 유효성
+  if (addr == NULL || is_kernel_vaddr(addr))
+    return false;
 
-  // 2. 페이지 경계 주소 → SPT 조회
-  void *va = pg_round_down(addr);
-  page = spt_find_page(spt, va);
-
-  // 3. 없으면:유저 모드 한정 스택 성장 허용
-  if (!page) {
-    /* 스택 확장 조건 검사:
-     * 1. 폴트 주소가 USER_STACK 범위 안에 있어야 함
-     * 2. 폴트 주소가 현재 유저 스택 포인터보다 아래에 있어야 함 (스택은 높은 주소에서 낮은 주소로 자람)
-     * 3. 너무 큰 갭(e.g., 1MB)을 건너뛴 스택 확장은 방지 (선택적)
-     */
-    // void *rsp = user ? f->rsp : thread_current()->rsp;
-    uintptr_t rsp;
-    if (user)
-      rsp = f->rsp;
-    else
-      rsp = thread_current()->rsp;
-    if (!(is_user_vaddr(addr) && (USER_STACK - (1 << 20) < addr) && (addr < USER_STACK) && (addr >= rsp - 8))) {
-      return false;
+  if (not_present)
+  {
+    /** Project 3-Stack Growth*/
+    // 시스템 콜 중에는 f->rsp가 커널 주소를 가리킬 수 있으므로 thread_current()->rsp를 사용합니다.
+    void *rsp = user ? f->rsp : thread_current()->rsp;
+    if (addr >= rsp - 8 || (USER_STACK >= addr && addr >= STACK_LIMIT && addr >= rsp)) {
+      vm_stack_growth(addr);
+      return true;
     }
+    else if (STACK_LIMIT <= addr && addr <= USER_STACK && addr > rsp){
+      vm_stack_growth(addr);
+      return true;
+    }
+    page = spt_find_page(spt, addr);
 
-    if (!vm_alloc_page_with_initializer(VM_ANON, va, true, NULL, NULL)) return false;
+    if (!page || (write && !page->writable))
+      return false;
 
-    page = spt_find_page(spt, va);
-    if (!page) return false;
+    return vm_do_claim_page(page);
   }
-
-  // 4. 쓰기 권한 체크
-  if (write && !page->writable) return false;
-
-  // 5. 클레임(프레임 확보+로드/제로필+매핑)
-  return vm_do_claim_page(page);
+  return false;
 }
 
 /* Free the page.
@@ -351,7 +353,6 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED) {
 
   // while (hash_next(&i)) {
   //   struct page *page = hash_entry(hash_cur(&i), struct page, hash_elem);
-
   //   destroy(page);
   // }
 
