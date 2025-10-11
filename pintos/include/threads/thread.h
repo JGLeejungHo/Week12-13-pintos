@@ -123,7 +123,7 @@ struct thread {
   /* Table for whole virtual memory owned by thread. */
   struct supplemental_page_table spt;
 
-  void *stack_pointer;
+  // void *stack_pointer;
   void *stack_bottom;
 #endif
     uintptr_t rsp;  /* 유저 스택 포인터 저장용 */
