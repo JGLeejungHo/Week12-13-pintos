@@ -282,25 +282,33 @@ int process_exec(void *f_name) {
   _if.eflags = FLAG_IF | FLAG_MBS;
 
   struct thread *cur = thread_current();
+#ifdef VM
+  /* exec()은 현재 프로세스를 새로운 프로세스로 교체합니다.
+   * 따라서 기존의 보조 페이지 테이블(SPT)을 파괴하고,
+   * 새로운 프로그램을 위해 깨끗한 SPT를 다시 초기화해야 합니다. */
+  supplemental_page_table_kill(&cur->spt);
+  supplemental_page_table_init(&cur->spt);
+#else
   uint64_t *old_page = cur->pml4;
+#endif
 
   /* We first kill the current context */
   // process_cleanup();
 
   /* And then load the binary */
   success = load(file_name, &_if);
+
+  /* file_name은 syscall 핸들러에서 할당된 페이지이므로 여기서 해제합니다. */
   palloc_free_page(file_name);
 
   /* If load failed, quit. */
   if (!success) {
-    uint64_t *bad = cur->pml4;
-    cur->pml4 = old_page;
-    process_activate(cur);
-    pml4_destroy(bad);
     return -1;
   }
 
+#ifndef VM
   pml4_destroy(old_page);
+#endif
 
   struct thread *t = thread_current();
   if (!t->fds_inited) {
