@@ -499,6 +499,28 @@ bool init_fds(struct list *fds)
 	return true;
 }
 
+static void *mmap(void *addr, size_t length, int writable, int fd, off_t offset) {
+	/* fd가 STDIN_FILENO 또는 STDOUT_FILENO인가? */
+	if (fd < 2) { // 0 (stdin) and 1 (stdout) are not mappable.
+		return NULL;
+	}
+	// 현재 스레드가 열고 있는 파일이 유효한지 검사하기
+	struct thread *t = thread_current();
+	struct fd_elem *fe = find_matched_fd(&t->fds, fd);
+
+	/*
+	 * fd로 열린 파일이 유효한가? (파일을 찾을 수 없는 경우)
+	 * 파일의 길이가 0인가?
+	 */
+	if (fe == NULL || fe->file == NULL || file_length(fe->file) == 0) {
+		return NULL;
+	}
+
+	// do_mmap은 vm/file.c에 구현될 핵심 로직입니다.
+	// 파일 객체의 복사본을 전달합니다.
+	return do_mmap(addr, length, writable, file_reopen(fe->file), offset);
+}
+
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED)
 {
@@ -560,6 +582,12 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		break;
 	case SYS_DUP2:
 		f->R.rax = handle_dup2(f->R.rdi, f->R.rsi);
+		break;
+	case SYS_MMAP:
+		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r11);
+		break;
+	case SYS_MUNMAP:
+		do_munmap(f->R.rdi);
 	default:
 		break;
 	}
