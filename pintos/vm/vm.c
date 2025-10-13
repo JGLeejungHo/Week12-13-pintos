@@ -213,15 +213,15 @@ static bool vm_handle_wp(struct page *page UNUSED) {}
 
 /**
  * @brief 페이지 폴트를 처리하는 함수
- * 
+ *
  * @param f 인터럽트 프레임 구조체 포인터
  * @param addr 페이지 폴트가 발생한 가상 주소
  * @param user 유저 모드에서 발생한 폴트인지 여부
  * @param write 쓰기 접근으로 인한 폴트인지 여부
  * @param not_present 해당 페이지가 존재하지 않아서 발생한 폴트인지 여부
- * 
+ *
  * @return 페이지 폴트 처리 성공 시 true, 실패 시 false 반환
- * 
+ *
  * @details 페이지 폴트가 발생했을 때 호출되며, 다음과 같은 경우들을 처리:
  * - 스택 확장이 필요한 경우 스택을 증가시킴
  * - 페이지가 SPT에 있는 경우 해당 페이지를 물리 메모리에 로드
@@ -229,7 +229,7 @@ static bool vm_handle_wp(struct page *page UNUSED) {}
  */
 /*🅛*/
 bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED, bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-  struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+  struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
 
   /** Project 3-Anonymous Page */
   struct page *page = NULL;
@@ -378,13 +378,13 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED) {
 
 bool lazy_load_segment(struct page *page, void *aux) {
   /* void * 포인터를 원래의 구조체 포인터로 사용하도록 형 변환하기 */
-  struct lazy_aux *args = (struct lazy_aux *) aux;
+  struct lazy_aux *args = (struct lazy_aux *)aux;
 
   /* 어느 파일의 어디서부터(offset) 읽어야할지를 정한다. (=커서 옮기기) */
   file_seek(args->file, args->ofs);
 
   /* file에서 read_bytes만큼 데이터를 읽어서 물리 메모리(kva)에 넣는다. (=로딩) */
-  if (file_read(args->file, page->frame->kva, args->read_bytes) != (int) args->read_bytes) {
+  if (file_read(args->file, page->frame->kva, args->read_bytes) != (int)args->read_bytes) {
     free(args);
     return false;
   }
