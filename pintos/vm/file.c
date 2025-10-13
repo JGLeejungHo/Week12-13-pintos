@@ -42,13 +42,13 @@ bool file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 
 	struct file_page *file_page = &page->file;
 
-	struct lazy_aux *aux = page->uninit.aux;
-	file_page->file = aux->file;
-	file_page->offset = aux->ofs;
-	file_page->read_bytes = aux->read_bytes;
-	file_page->zero_bytes = aux->zero_bytes;
-
-	return true;
+	// struct lazy_aux *aux = page->uninit.aux;
+	// file_page->file = aux->file;
+	// file_page->offset = aux->ofs;
+	// file_page->read_bytes = aux->read_bytes;
+	// file_page->zero_bytes = aux->zero_bytes;
+	//
+	// return true;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -75,17 +75,17 @@ static bool file_backed_swap_out (struct page *page) {
 static void file_backed_destroy (struct page *page) {
 	struct file_page *file_page = &page->file;
 
-	/* 페이지가 수정되었는지(dirty) 확인하고, 수정되었다면 파일에 다시 쓴다. */
-	if (pml4_is_dirty(thread_current()->pml4, page->va)) {
-		/*
-		 * file_write_at() 함수를 사용하여 페이지의 내용을 파일에 쓴다.
-		 * - file: 페이지와 연결된 파일 객체
-		 * - page->frame->kva: 페이지의 실제 데이터가 있는 커널 가상 주소
-		 * - file_page->read_bytes: 파일에서 읽어온 실제 데이터의 크기
-		 * - file_page->offset: 파일 내에서 쓰기를 시작할 위치
-		 */
-		file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset);
-	}
+	// /* 페이지가 수정되었는지(dirty) 확인하고, 수정되었다면 파일에 다시 쓴다. */
+	// if (pml4_is_dirty(thread_current()->pml4, page->va)) {
+	// 	/*
+	// 	 * file_write_at() 함수를 사용하여 페이지의 내용을 파일에 쓴다.
+	// 	 * - file: 페이지와 연결된 파일 객체
+	// 	 * - page->frame->kva: 페이지의 실제 데이터가 있는 커널 가상 주소
+	// 	 * - file_page->read_bytes: 파일에서 읽어온 실제 데이터의 크기
+	// 	 * - file_page->offset: 파일 내에서 쓰기를 시작할 위치
+	// 	 */
+	// 	file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset);
+	// }
 }
 
 static bool mmap_is_valid (void *addr, size_t length, off_t offset) {
