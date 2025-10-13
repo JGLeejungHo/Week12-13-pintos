@@ -201,8 +201,11 @@ fail:
   while (!list_empty(&dst->fds)) {
     struct list_elem *x = list_pop_back(&dst->fds);
     struct fd_elem *t = list_entry(x, struct fd_elem, elem);
-    if (t->file)
-      file_close(t->file);
+    if (t->file) {
+      /* file_close는 inode까지 닫을 수 있으므로 호출하면 안 됩니다. */
+      /* file_duplicate로 생성된 file 객체만 해제합니다. */
+      free(t->file);
+    }
     free(t);
   }
   return false;

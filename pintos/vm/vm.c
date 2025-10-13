@@ -331,19 +331,35 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
     if (s_page->operations->type == VM_UNINIT) {
       struct uninit_page *u = &s_page->uninit;
 
-      if (!vm_alloc_page_with_initializer(s_page->uninit.type, s_page->va, s_page->writable, u->init, u->aux)) {
+      // 자식을 위한 lazy_aux 복사본 생성
+      struct lazy_aux *new_aux = malloc(sizeof(struct lazy_aux));
+      if (!new_aux) {
         return false;
       }
-    } else {
-      if (!vm_alloc_page_with_initializer(s_page->operations->type, s_page->va, s_page->writable, NULL, NULL)) {
-        return false;
-      }
-      if (!vm_claim_page(s_page->va)) {
-        return false;
-      }
+      memcpy(new_aux, u->aux, sizeof(struct lazy_aux));
+      new_aux->file = file_reopen(new_aux->file); // 자식만의 파일 핸들 생성
 
+      if (!vm_alloc_page_with_initializer(s_page->uninit.type, s_page->va, s_page->writable, u->init, new_aux)) {
+        return false;
+      }
+    } else { /* Already loaded page */
+      if (!vm_alloc_page(page_get_type(s_page), s_page->va, s_page->writable)) {
+        return false;
+      }
       struct page *dpage = spt_find_page(dst, s_page->va);
-      memcpy(dpage->frame->kva, s_page->frame->kva, PGSIZE);
+      if (!dpage) {
+        return false;
+      }
+      struct frame *dframe = vm_get_frame();
+      if (!dframe) {
+        return false;
+      }
+      dframe->page = dpage;
+      dpage->frame = dframe;
+      memcpy(dframe->kva, s_page->frame->kva, PGSIZE);
+      if (!pml4_set_page(thread_current()->pml4, dpage->va, dframe->kva, dpage->writable)) {
+        return false;
+      }
     }
   }
   return true;
