@@ -330,19 +330,16 @@ int process_exec(void *f_name) {
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
 int process_wait(tid_t child_tid UNUSED) {
-  /* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-   * XXX:       to add infinite loop here before
-   * XXX:       implementing the process_wait. */
-
   struct child_status *cs = find_matched_tid(child_tid);
   if (!cs) {
     return -1;
   }
   sema_down(&cs->dead);
 
+  int exit_status = cs->exit_status;   /* <-- 자식의 exit 상태를 저장 */
   list_remove(&cs->elem);
   free(cs);
-  return -1;
+  return exit_status;                   /* <-- -1 대신 실제 exit_status 반환 */
 }
 
 /* Exit the process. This function is called by thread_exit (). */
