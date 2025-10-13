@@ -187,10 +187,16 @@ void * do_mmap (void *addr, size_t length, int writable,
 	return addr;
 }
 
-/*
- * mmap으로 생성했던 "예약"을 취소하고,
- * 그동안 메모리 내용이 변경되었다면
- * 그 내용을 파일에 다시 써주는(write-back) 역할을 한다.
- */
+/* mmap 호출시 생성한 모든 페이지들을 찾아서 SPT에서 제거하는 역할 */
 void do_munmap (void *addr) {
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	struct page *page;
+
+	while ((page = spt_find_page(spt, addr)) != NULL) {
+		if (page_get_type(page) != VM_FILE) {
+			break;
+		}
+		spt_remove_page(spt, page);
+		addr += PGSIZE;
+	}
 }
