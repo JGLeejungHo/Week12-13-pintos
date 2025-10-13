@@ -21,12 +21,33 @@ static const struct page_operations file_ops = {
 void vm_file_init (void) {
 }
 
-/* Initialize the file backed page */
+/**
+ * @brief 파일 기반 페이지를 초기화하는 함수
+ * 
+ * @param page 초기화할 페이지 구조체
+ * @param type 가상 메모리 타입 (VM_FILE이어야 함)
+ * @param kva 커널 가상 주소
+ * 
+ * @return true 초기화 성공
+ * @return false 초기화 실패
+ * 
+ * @details
+ * 페이지를 파일 기반 페이지로 초기화하고 필요한 핸들러를 설정합니다.
+ * 파일 기반 페이지는 디스크의 파일과 매핑되어 있으며,
+ * 필요할 때 파일에서 내용을 읽어오거나 변경된 내용을 파일에 쓸 수 있습니다.
+ */
 bool file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
-	/* Set up the handler */
 	page->operations = &file_ops;
 
 	struct file_page *file_page = &page->file;
+
+	struct lazy_aux *aux = page->uninit.aux;
+	file_page->file = aux->file;
+	file_page->offset = aux->ofs;
+	file_page->read_bytes = aux->read_bytes;
+	file_page->zero_bytes = aux->zero_bytes;
+
+	return true;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -143,6 +164,10 @@ void * do_mmap (void *addr, size_t length, int writable,
 	return addr;
 }
 
-/* Do the munmap */
+/*
+ * mmap으로 생성했던 "예약"을 취소하고,
+ * 그동안 메모리 내용이 변경되었다면
+ * 그 내용을 파일에 다시 써주는(write-back) 역할을 한다.
+ */
 void do_munmap (void *addr) {
 }
