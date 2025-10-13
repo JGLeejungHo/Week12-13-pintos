@@ -145,8 +145,8 @@ bool spt_insert_page(struct supplemental_page_table *spt UNUSED, struct page *pa
 }
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page) {
+  hash_delete(&spt->hash, &page->hash_elem);
   vm_dealloc_page(page);
-  return true;
 }
 
 /* Get the struct frame, that will be evicted. */
