@@ -2,6 +2,7 @@
 
 #include "round.h"
 #include "threads/malloc.h"
+#include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "vm/vm.h"
 
@@ -61,8 +62,30 @@ static bool file_backed_swap_out (struct page *page) {
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
+/**
+ * @brief 파일 기반 페이지를 제거하는 함수
+ * 
+ * @param page 제거할 페이지 구조체의 포인터
+ * 
+ * @details
+ * 파일 기반 페이지를 제거하기 전에 페이지가 수정되었는지(dirty) 확인하고,
+ * 수정되었다면 변경된 내용을 원본 파일에 기록합니다.
+ * 페이지 자체의 메모리 해제는 이 함수를 호출한 쪽에서 처리합니다.
+ */
 static void file_backed_destroy (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page = &page->file;
+
+	/* 페이지가 수정되었는지(dirty) 확인하고, 수정되었다면 파일에 다시 쓴다. */
+	if (pml4_is_dirty(thread_current()->pml4, page->va)) {
+		/*
+		 * file_write_at() 함수를 사용하여 페이지의 내용을 파일에 쓴다.
+		 * - file: 페이지와 연결된 파일 객체
+		 * - page->frame->kva: 페이지의 실제 데이터가 있는 커널 가상 주소
+		 * - file_page->read_bytes: 파일에서 읽어온 실제 데이터의 크기
+		 * - file_page->offset: 파일 내에서 쓰기를 시작할 위치
+		 */
+		file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset);
+	}
 }
 
 static bool mmap_is_valid (void *addr, size_t length, off_t offset) {
