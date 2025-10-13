@@ -1,6 +1,7 @@
 /* file.c: Implementation of memory backed file object (mmaped object). */
 
 #include "round.h"
+#include "stdio.h"
 #include "threads/malloc.h"
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
@@ -37,18 +38,33 @@ void vm_file_init (void) {
  * 파일 기반 페이지는 디스크의 파일과 매핑되어 있으며,
  * 필요할 때 파일에서 내용을 읽어오거나 변경된 내용을 파일에 쓸 수 있습니다.
  */
-bool file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
+bool file_backed_initializer(struct page *page, enum vm_type type, void *kva) {
 	page->operations = &file_ops;
+	ASSERT(VM_TYPE(type) == VM_FILE);
+
+	// 🔍 여기부터 추가
+	// struct lazy_aux *aux_dbg = (struct lazy_aux *)page->uninit.aux;
+	// if (aux_dbg == NULL) {
+	// 	PANIC("[FILE_INIT] aux=NULL  va=%p thr=%s init=%p type=%d",
+	// 		  page->va, thread_current()->name, page->uninit.init, (int)page->uninit.type);
+	// } else {
+	// 	printf("[FILE_INIT] aux=%p va=%p file=%p ofs=%lld rb=%zu zb=%zu thr=%s\n",
+	// 		   aux_dbg, page->va, aux_dbg->file, (long long)aux_dbg->ofs,
+	// 		   aux_dbg->read_bytes, aux_dbg->zero_bytes, thread_current()->name);
+	// }
+	// 🔍 추가 끝
 
 	struct file_page *file_page = &page->file;
 
-	// struct lazy_aux *aux = page->uninit.aux;
-	// file_page->file = aux->file;
-	// file_page->offset = aux->ofs;
-	// file_page->read_bytes = aux->read_bytes;
-	// file_page->zero_bytes = aux->zero_bytes;
-	//
-	// return true;
+	struct lazy_aux *aux = (struct lazy_aux *)page->uninit.aux;
+	ASSERT(aux != NULL);
+
+	file_page->file = aux->file;  // do_mmap에서 넣어준 reopen()된 파일 포인터
+	file_page->offset = aux->ofs;
+	file_page->read_bytes = aux->read_bytes;  // 이 페이지가 실제 파일에서 읽을 바이트 수
+	file_page->zero_bytes = aux->zero_bytes;  // 나머지는 0으로 채움
+
+	return true;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -72,20 +88,20 @@ static bool file_backed_swap_out (struct page *page) {
  * 수정되었다면 변경된 내용을 원본 파일에 기록합니다.
  * 페이지 자체의 메모리 해제는 이 함수를 호출한 쪽에서 처리합니다.
  */
-static void file_backed_destroy (struct page *page) {
+static void file_backed_destroy(struct page *page) {
 	struct file_page *file_page = &page->file;
 
-	// /* 페이지가 수정되었는지(dirty) 확인하고, 수정되었다면 파일에 다시 쓴다. */
-	// if (pml4_is_dirty(thread_current()->pml4, page->va)) {
-	// 	/*
-	// 	 * file_write_at() 함수를 사용하여 페이지의 내용을 파일에 쓴다.
-	// 	 * - file: 페이지와 연결된 파일 객체
-	// 	 * - page->frame->kva: 페이지의 실제 데이터가 있는 커널 가상 주소
-	// 	 * - file_page->read_bytes: 파일에서 읽어온 실제 데이터의 크기
-	// 	 * - file_page->offset: 파일 내에서 쓰기를 시작할 위치
-	// 	 */
-	// 	file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset);
-	// }
+	struct thread *t = thread_current();
+	if (page->frame && pml4_is_dirty(t->pml4, page->va)) {
+		void *kva = page->frame->kva;
+		(void)file_write_at(file_page->file, kva, file_page->read_bytes, file_page->offset);
+		pml4_set_dirty(t->pml4, page->va, false);
+	}
+
+	if (file_page->file) {
+		file_close(file_page->file);  // **여기서 닫을 수 있게 do_mmap에서 page마다 file_reopen() 사용**
+		file_page->file = NULL;
+	}
 }
 
 static bool mmap_is_valid (void *addr, size_t length, off_t offset) {
