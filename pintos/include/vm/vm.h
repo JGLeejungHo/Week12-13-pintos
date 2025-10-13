@@ -39,6 +39,14 @@ struct thread;
 
 // #define VM_TYPE(type) ((type) & 7)
 
+struct lazy_aux {
+  struct file *file;  // 파일 핸들
+  off_t ofs;          // 오프셋
+  size_t read_bytes;  // 파일에서 읽을 바이트
+  size_t zero_bytes;  // 나머지 0으로 채울 바이트
+  bool writable;      // 페이지의 쓰기 가능 여부
+};
+
 /* The representation of "page".
  * This is kind of "parent class", which has four "child class"es, which are
  * uninit_page, file_page, anon_page, and page cache (project4).
@@ -112,6 +120,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
                                     void *aux);
 void vm_dealloc_page(struct page *page);
 bool vm_claim_page(void *va);
+bool lazy_load_segment(struct page *page, void *aux);
 enum vm_type page_get_type(struct page *page);
 
 #endif /* VM_VM_H */

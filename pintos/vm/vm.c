@@ -375,3 +375,24 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED) {
 
   // hash_clear(&spt->hash, NULL);
 }
+
+bool lazy_load_segment(struct page *page, void *aux) {
+  /* void * 포인터를 원래의 구조체 포인터로 사용하도록 형 변환하기 */
+  struct lazy_aux *args = (struct lazy_aux *) aux;
+
+  /* 어느 파일의 어디서부터(offset) 읽어야할지를 정한다. (=커서 옮기기) */
+  file_seek(args->file, args->ofs);
+
+  /* file에서 read_bytes만큼 데이터를 읽어서 물리 메모리(kva)에 넣는다. (=로딩) */
+  if (file_read(args->file, page->frame->kva, args->read_bytes) != (int) args->read_bytes) {
+    free(args);
+    return false;
+  }
+
+  /* 페이지에 남는 공간이 있다면 0으로 채워넣는다. (=초기화) */
+  /* read_bytes만큼 채우고 남은 공간의 시작 주소에서 zero_bytes만큼 0으로 채운다. */
+  memset(page->frame->kva + args->read_bytes, 0, args->zero_bytes);
+
+  free(args);
+  return true;
+}
