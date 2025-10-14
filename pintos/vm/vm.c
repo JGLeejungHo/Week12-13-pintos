@@ -413,15 +413,11 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
       if (!dpage) {
         return false;
       }
-      struct frame *dframe = vm_get_frame();
-      if (!dframe) {
-        return false;
-      }
-      dframe->page = dpage;
-      dpage->frame = dframe;
-      memcpy(dframe->kva, s_page->frame->kva, PGSIZE);
-      if (!pml4_set_page(thread_current()->pml4, dpage->va, dframe->kva, dpage->writable)) {
-        return false;
+      if (s_page->frame) {
+        if (!vm_claim_page(dpage->va)) return false;
+        memcpy(dpage->frame->kva, s_page->frame->kva, PGSIZE);
+      } else {
+        // vm_claim_page(dpage->va); // claim을 하면 uninit이 아니므로 swap_in에서 문제가 발생할 수 있음
       }
     }
   }
