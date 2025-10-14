@@ -391,6 +391,10 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
   while (hash_next(&i)) {
     struct page *s_page = hash_entry(hash_cur(&i), struct page, hash_elem);
 
+    if (page_get_type(s_page) == VM_FILE) {
+      continue;
+    }
+
     if (s_page->operations->type == VM_UNINIT) {
       struct uninit_page *u = &s_page->uninit;
 
