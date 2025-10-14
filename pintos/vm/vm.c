@@ -16,6 +16,19 @@
 // 🅒
 #include "lib/string.h"
 
+// 🅴
+#include "lib/kernel/list.h"  // frame table용
+
+/* Frame table node: frame 포인터 + 리스트 엘리먼트 */
+struct frame_node {
+  struct frame *f;
+  struct list_elem elem;
+};
+
+/* Frame table (second-chance) */
+static struct list frame_table;      /* 전체 프레임 목록 */
+static struct list_elem *clock_hand; /* 시계 바늘 */
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void vm_init(void) {
@@ -27,6 +40,10 @@ void vm_init(void) {
   register_inspect_intr();
   /* DO NOT MODIFY UPPER LINES. */
   /* TODO: Your code goes here. */
+
+  /*🅴 frame table 초기화 */
+  list_init(&frame_table);  // 테이블 초기화
+  clock_hand = NULL;        // 바늘 초기화
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -68,7 +85,7 @@ static bool page_less(const struct hash_elem *a, const struct hash_elem *b, void
 bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
                                     bool writable, vm_initializer *init,
                                     void *aux) {
-  ASSERT(VM_TYPE(type) != VM_UNINIT)  // type 이 UNINIT 이라면 PANIC
+  ASSERT(VM_TYPE(type) != VM_UNINIT);  // type 이 UNINIT 이라면 PANIC
 
   upage = pg_round_down(upage);
   struct supplemental_page_table *spt = &thread_current()->spt;
@@ -82,7 +99,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
     if (page == NULL) {
       goto err;
     }
-    bool uninitialized = NULL;
+    // bool uninitialized = NULL;
     switch (VM_TYPE(type)) { /* uninit_new()를 이용해 "uninitialized page"로 설정 */
       case VM_ANON:
         uninit_new(page, upage, init, type, aux, anon_initializer);
@@ -92,7 +109,9 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
         uninit_new(page, upage, init, type, aux, file_backed_initializer);
         break;
       default:
-        break;
+        free(page);
+        goto err;
+        // break;
     }
 
     page->writable = writable;
@@ -149,46 +168,90 @@ void spt_remove_page(struct supplemental_page_table *spt, struct page *page) {
   vm_dealloc_page(page);
 }
 
-/* Get the struct frame, that will be evicted. */
+/* 🅴 Get the struct frame, that will be evicted. */
 static struct frame *vm_get_victim(void) {
-  struct frame *victim = NULL;
-  /* TODO: The policy for eviction is up to you. */
+  if (list_empty(&frame_table)) return NULL;
+  if (clock_hand == NULL) clock_hand = list_begin(&frame_table);
 
-  return victim;
+  size_t n = list_size(&frame_table);
+  struct frame *fallback = NULL;
+
+  for (size_t i = 0; i < n; i++) {
+    if (clock_hand == list_end(&frame_table))
+      clock_hand = list_begin(&frame_table);
+
+    struct frame_node *nd = list_entry(clock_hand, struct frame_node, elem);
+    clock_hand = list_next(clock_hand);
+
+    struct frame *f = nd->f;
+    if (f->page == NULL) return f;  // 빈 프레임은 즉시 사용
+
+    struct page *p = f->page;
+    if (!pml4_is_accessed(thread_current()->pml4, p->va)) {
+      return f;  // accessed==0 → 희생자 확정
+    }
+    /* accessed==1 → 한번만 기회를 주고 떨어뜨림 */
+    pml4_set_accessed(thread_current()->pml4, p->va, false);
+    fallback = f;  // 전부 1이면 마지막 본 f를 사용
+  }
+  return fallback;  // 한 바퀴 내에 반드시 반환
 }
 
-/* Evict one page and return the corresponding frame.
+/* 🅴 Evict one page and return the corresponding frame.
  * Return NULL on error.*/
 static struct frame *vm_evict_frame(void) {
-  struct frame *victim UNUSED = vm_get_victim();
-  /* TODO: swap out the victim and return the evicted frame. */
+  struct frame *victim = vm_get_victim();
+  if (!victim) return NULL;
 
-  return NULL;
+  if (victim->page) {
+    struct page *vp = victim->page;
+
+    /* 0) 당장 다시 접근되며 accessed가 재점화되는 걸 막기 위해 매핑 제거 먼저 */
+    pml4_clear_page(thread_current()->pml4, vp->va);
+
+    /* 1) 백엔드로 스왑아웃 시도 */
+    if (!swap_out(vp)) {
+      /* 실패 시 매핑을 복구해주고 포기 */
+      pml4_set_page(thread_current()->pml4, vp->va, victim->kva, vp->writable);
+      return NULL;
+    }
+
+    /* 2) 양방향 연결 해제(프레임 재사용 준비) */
+    vp->frame = NULL;
+    victim->page = NULL;
+  }
+  return victim;  // 같은 kva를 재사용
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
  * and return it. This always return valid address. That is, if the user pool
  * memory is full, this function evicts the frame to get the available memory
  * space.*/
-/*🅕 프레임 실물 확보(+프레임 메타 생성)*/
+/*🅕 🅴 프레임 실물 확보(+프레임 메타 생성): PANIC → 퇴출로 회복, 테이블 등록*/
 static struct frame *vm_get_frame(void) {
-  struct frame *frame = NULL;
-  /* TODO: Fill this function. */
-  void *kva = palloc_get_page(PAL_USER);  // ✅ 플래그는 PAL_USER
-  if (kva == NULL) {
-    PANIC("todo");
-  }
-  frame = malloc(sizeof(struct frame));  // 위에 성공이면 프레임구조체도 할당
-  if (frame == NULL) {
-    PANIC("Frame malloc failed");
+  void *kva = palloc_get_page(PAL_USER);
+  if (kva == NULL) return vm_evict_frame();  // 부족하면 퇴출 시도
+
+  struct frame *frame = malloc(sizeof *frame);
+  if (!frame) {  // 안전 반환
+    palloc_free_page(kva);
+    return NULL;
   }
   frame->kva = kva;
-  // frame->page->va = NULL;  // 멤버들초기화
   frame->page = NULL;
-  // frame->page->frame = frame;  // page에서 frame 접근할수있게 설정
-  ASSERT(frame != NULL);
-  ASSERT(frame->page == NULL);
-  return frame;  // 반환
+
+  /* frame_table에는 frame_node를 넣는다 */
+  struct frame_node *node = malloc(sizeof *node);  // 테이블에 등록
+  if (!node) {
+    palloc_free_page(kva);
+    free(frame);
+    return NULL;
+  }
+  node->f = frame;
+  list_push_back(&frame_table, &node->elem);  // 목록 관리
+  if (clock_hand == NULL) clock_hand = list_begin(&frame_table);
+
+  return frame;
 }
 
 /* Growing the stack. */
@@ -206,22 +269,22 @@ static void vm_stack_growth(void *addr UNUSED) {
 }
 
 /* Handle the fault on write_protected page */
-static bool vm_handle_wp(struct page *page UNUSED) {}
+static bool vm_handle_wp(struct page *page UNUSED) { return false; }
 
 /** Project 3-Stack Growth*/
 #define STACK_LIMIT (USER_STACK - (1 << 20))
 
 /**
  * @brief 페이지 폴트를 처리하는 함수
- * 
+ *
  * @param f 인터럽트 프레임 구조체 포인터
  * @param addr 페이지 폴트가 발생한 가상 주소
  * @param user 유저 모드에서 발생한 폴트인지 여부
  * @param write 쓰기 접근으로 인한 폴트인지 여부
  * @param not_present 해당 페이지가 존재하지 않아서 발생한 폴트인지 여부
- * 
+ *
  * @return 페이지 폴트 처리 성공 시 true, 실패 시 false 반환
- * 
+ *
  * @details 페이지 폴트가 발생했을 때 호출되며, 다음과 같은 경우들을 처리:
  * - 스택 확장이 필요한 경우 스택을 증가시킴
  * - 페이지가 SPT에 있는 경우 해당 페이지를 물리 메모리에 로드
@@ -229,7 +292,7 @@ static bool vm_handle_wp(struct page *page UNUSED) {}
  */
 /*🅛*/
 bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED, bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-  struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+  struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
 
   /** Project 3-Anonymous Page */
   struct page *page = NULL;
@@ -337,7 +400,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
         return false;
       }
       memcpy(new_aux, u->aux, sizeof(struct lazy_aux));
-      new_aux->file = file_reopen(new_aux->file); // 자식만의 파일 핸들 생성
+      new_aux->file = file_reopen(new_aux->file);  // 자식만의 파일 핸들 생성
 
       if (!vm_alloc_page_with_initializer(s_page->uninit.type, s_page->va, s_page->writable, u->init, new_aux)) {
         return false;
@@ -377,7 +440,8 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED) {
   /* TODO: Destroy all the supplemental_page_table hold by thread and
    * TODO: writeback all the modified contents to the storage. */
 
-  if (!spt || !spt->hash.buckets || !spt->hash.bucket_cnt) return;  // 예외처리(SPT 자체가 없음, 버킷 메모리 없음)
+  // if (!spt || !spt->hash.buckets || !spt->hash.bucket_cnt) return;  // 예외처리(SPT 자체가 없음, 버킷 메모리 없음)
+  if (!spt) return;  // 예외처리(SPT 자체가 없음, 버킷 메모리 없음)
 
   hash_clear(&spt->hash, spt_destructor);
 
@@ -394,13 +458,13 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED) {
 
 bool lazy_load_segment(struct page *page, void *aux) {
   /* void * 포인터를 원래의 구조체 포인터로 사용하도록 형 변환하기 */
-  struct lazy_aux *args = (struct lazy_aux *) aux;
+  struct lazy_aux *args = (struct lazy_aux *)aux;
 
   /* 어느 파일의 어디서부터(offset) 읽어야할지를 정한다. (=커서 옮기기) */
   file_seek(args->file, args->ofs);
 
   /* file에서 read_bytes만큼 데이터를 읽어서 물리 메모리(kva)에 넣는다. (=로딩) */
-  if (file_read(args->file, page->frame->kva, args->read_bytes) != (int) args->read_bytes) {
+  if (file_read(args->file, page->frame->kva, args->read_bytes) != (int)args->read_bytes) {
     free(args);
     return false;
   }
