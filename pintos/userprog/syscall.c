@@ -46,7 +46,10 @@ static int handle_dup2(int oldfd, int newfd);
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
+struct lock filesys_lock;
+
 void syscall_init(void) {
+  lock_init(&filesys_lock);
   write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48 |
                           ((uint64_t)SEL_KCSEG) << 32);
   write_msr(MSR_LSTAR, (uint64_t)syscall_entry);

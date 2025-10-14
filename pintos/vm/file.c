@@ -2,10 +2,12 @@
 
 #include "round.h"
 #include "stdio.h"
+#include "string.h"
 #include "threads/malloc.h"
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "vm/vm.h"
+#include "userprog/syscall.h"   // filesys_lock 선언 사용
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
@@ -67,14 +69,51 @@ bool file_backed_initializer(struct page *page, enum vm_type type, void *kva) {
 	return true;
 }
 
+
 /* Swap in the page by read contents from the file. */
-static bool file_backed_swap_in (struct page *page, void *kva) {
-	struct file_page *file_page UNUSED = &page->file;
+/* ========== swap_in: 파일에서 읽어 KVA 채우기 ========== */
+static bool file_backed_swap_in(struct page *page, void *kva) {
+	struct file_page *file_page = &page->file;
+	ASSERT(file_page->file != NULL);
+	ASSERT(kva != NULL);
+
+	lock_acquire(&filesys_lock);
+	off_t r = file_read_at(file_page->file, kva, file_page->read_bytes, file_page->offset);
+	lock_release(&filesys_lock);
+
+	if (r != (off_t)file_page->read_bytes) return false;
+
+	if (file_page->zero_bytes) {
+		memset((uint8_t *)kva + file_page->read_bytes, 0, file_page->zero_bytes);
+	}
+	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
-static bool file_backed_swap_out (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
+/* ========== swap_out: 더티면 파일로 write-back, 아니면 드롭 ========== */
+static bool file_backed_swap_out(struct page *page) {
+	struct file_page *file_page = &page->file;
+	ASSERT(file_page->file != NULL);
+
+	struct thread *t = thread_current();
+	void *kva = page->frame ? page->frame->kva : NULL;
+
+	/* 페이지 테이블 dirty 확인 후, 더티면 해당 구간만 write-back */
+	if (pml4_is_dirty(t->pml4, page->va) && kva != NULL && file_page->read_bytes > 0) {
+		lock_acquire(&filesys_lock);
+		off_t w = file_write_at(file_page->file, kva, file_page->read_bytes, file_page->offset);
+		lock_release(&filesys_lock);
+		if (w != (off_t)file_page->read_bytes) return false;
+		pml4_set_dirty(t->pml4, page->va, false);
+	}
+
+	/* 이 시점에서 물리 매핑 해제 (프레임 해제는 프레임 계층이 처리) */
+	pml4_clear_page(t->pml4, page->va);
+	if (page->frame) {
+		page->frame->page = NULL; /* 역참조 해제만 */
+		page->frame = NULL;
+	}
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
@@ -94,8 +133,10 @@ static void file_backed_destroy(struct page *page) {
 	struct thread *t = thread_current();
 	if (page->frame && pml4_is_dirty(t->pml4, page->va)) {
 		void *kva = page->frame->kva;
+		lock_acquire(&filesys_lock);
 		(void)file_write_at(file_page->file, kva, file_page->read_bytes, file_page->offset);
-		pml4_set_dirty(t->pml4, page->va, false);
+		lock_release(&filesys_lock);
+		pml4_set_dirty(t->pml4, page->va, false); // 이 시점에는 락이 없어도 안전합니다.
 	}
 
 	if (file_page->file) {

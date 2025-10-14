@@ -34,3 +34,5 @@ struct fd_elem
 
 bool init_fds(struct list *fds);
 void handle_exit(int status);
+
+extern struct lock filesys_lock;
