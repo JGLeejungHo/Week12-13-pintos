@@ -30,6 +30,7 @@ static tid_t handle_fork(const char *thread_name, struct intr_frame *parent_if);
 static int handle_wait(tid_t tid);
 static int handle_exec(const char *cmd_line);
 static void handle_seek(int fd, off_t position);
+static bool handle_remove(const char *file);
 static off_t handle_tell(int fd);
 static int handle_dup2(int oldfd, int newfd);
 
@@ -352,6 +353,19 @@ static bool handle_create(char *file, unsigned int initial_size) {
   return success;
 }
 
+static bool handle_remove(const char *file) {
+  ASSERT(file != NULL);
+
+  char name[NAME_MAX + 1];
+  if (!copy_in_file(file, name)) {
+    return false;
+  }
+
+  bool success = filesys_remove(name);
+
+  return success;
+}
+
 static void fds_flush(struct list *fds) {
   while (!list_empty(fds)) {
     struct fd_elem *fe = list_entry(list_pop_front(fds), struct fd_elem, elem);
@@ -512,6 +526,12 @@ void syscall_handler(struct intr_frame *f UNUSED) {
       break;
     case SYS_CLOSE:
       handle_close(f->R.rdi);
+      break;
+    case SYS_REMOVE:
+      if (f->R.rdi == NULL) {
+        handle_exit(-1);
+      }
+      f->R.rax = handle_remove(f->R.rdi);
       break;
     case SYS_FORK:
       f->R.rax = handle_fork(f->R.rdi, f);
